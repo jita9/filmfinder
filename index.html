@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a12">
+<title>FilmFinder — どこで観る？をすぐ解決</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    min-height: 100vh;
+    background: #08080f;
+    color: #fff;
+    font-family: 'Noto Sans JP', -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; }
+  input::placeholder { color: #555; }
+
+  /* Animations */
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes grain {
+    0%, 100% { transform: translate(0,0); }
+    10% { transform: translate(-2%,-2%); }
+    30% { transform: translate(2%,1%); }
+    50% { transform: translate(-1%,2%); }
+    70% { transform: translate(1%,-1%); }
+    90% { transform: translate(-2%,1%); }
+  }
+
+  /* Film grain overlay */
+  body::before {
+    content: '';
+    position: fixed; top: -50%; left: -50%; width: 200%; height: 200%;
+    background: repeating-conic-gradient(rgba(255,255,255,0.008) 0%, transparent 0.5%);
+    animation: grain 4s steps(8) infinite;
+    pointer-events: none; z-index: 9999; opacity: 0.6;
+  }
+
+  /* Ambient */
+  .ambient {
+    position: fixed; top: -40%; left: 50%; width: 140%; height: 70%;
+    background: radial-gradient(ellipse, rgba(245,197,24,0.03) 0%, transparent 65%);
+    transform: translateX(-50%); pointer-events: none; z-index: 0;
+  }
+  .ambient-bottom {
+    position: fixed; bottom: -20%; left: 50%; width: 100%; height: 40%;
+    background: radial-gradient(ellipse, rgba(139,92,246,0.02) 0%, transparent 60%);
+    transform: translateX(-50%); pointer-events: none; z-index: 0;
+  }
+
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 20px; position: relative; z-index: 1; }
+
+  /* Header */
+  .header {
+    padding: 20px 0 12px; display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .logo { cursor: pointer; display: flex; align-items: center; gap: 12px; }
+  .logo-icon {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: linear-gradient(135deg, #F5C518 0%, #D4A017 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 19px; box-shadow: 0 4px 20px rgba(245,197,24,0.25);
+    position: relative;
+  }
+  .logo-icon::after {
+    content: ''; position: absolute; inset: -2px; border-radius: 12px;
+    background: linear-gradient(135deg, rgba(245,197,24,0.3), transparent);
+    z-index: -1; filter: blur(8px);
+  }
+  .logo-name {
+    font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 2px;
+    background: linear-gradient(135deg, #F5C518, #FFE066);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .logo-sub { font-size: 9px; color: #555; letter-spacing: 1px; margin-top: -2px; }
+  .tmdb-badge {
+    font-size: 8px; color: #555; padding: 4px 8px;
+    border: 1px solid rgba(255,255,255,0.06); border-radius: 6px;
+    line-height: 1.3; text-align: center;
+  }
+
+  /* Hero */
+  .hero { text-align: center; padding: 48px 0 36px; animation: fadeIn 0.6s both; }
+  .hero h1 { font-size: 30px; font-weight: 800; line-height: 1.4; letter-spacing: -0.5px; }
+  .gold {
+    background: linear-gradient(135deg, #F5C518, #FFE066, #F5C518);
+    background-size: 200% auto;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    animation: shimmer 3s infinite linear;
+  }
+  .hero p { color: #666; font-size: 14px; margin-top: 8px; }
+
+  /* Search */
+  .search-wrap { position: relative; margin-bottom: 32px; }
+  .search-row {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px; padding: 5px 5px 5px 18px;
+    transition: all 0.3s;
+  }
+  .search-row:focus-within {
+    border-color: rgba(245,197,24,0.4);
+    box-shadow: 0 0 30px rgba(245,197,24,0.06);
+    background: rgba(255,255,255,0.06);
+  }
+  .search-row input {
+    flex: 1; background: none; border: none; outline: none;
+    color: #fff; font-size: 15px; padding: 12px 0; min-width: 0;
+  }
+  .search-btn {
+    background: linear-gradient(135deg, #F5C518, #D4A017);
+    border: none; border-radius: 12px; padding: 10px 22px;
+    color: #000; font-weight: 700; font-size: 14px;
+    cursor: pointer; transition: all 0.2s; flex-shrink: 0;
+  }
+  .search-btn:hover { transform: scale(1.03); box-shadow: 0 4px 16px rgba(245,197,24,0.3); }
+  .search-btn:active { transform: scale(0.98); }
+  .search-btn:disabled { opacity: 0.4; cursor: default; transform: none; box-shadow: none; }
+
+  /* Mood */
+  .sec-title {
+    font-size: 12px; color: #666; font-weight: 700; margin-bottom: 14px;
+    letter-spacing: 2px; text-transform: uppercase;
+  }
+  .mood-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 40px; }
+  @media (max-width: 400px) { .mood-grid { grid-template-columns: repeat(2, 1fr); } }
+  .mood-card {
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px; padding: 18px 8px; cursor: pointer; text-align: center;
+    transition: all 0.25s; position: relative; overflow: hidden;
+  }
+  .mood-card::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at center, rgba(245,197,24,0.08), transparent 70%);
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .mood-card:hover::before, .mood-card:active::before { opacity: 1; }
+  .mood-card:hover { border-color: rgba(245,197,24,0.25); transform: translateY(-2px); }
+  .mood-emoji { font-size: 30px; margin-bottom: 6px; }
+  .mood-label { font-size: 12px; font-weight: 600; color: #aaa; }
+
+  /* Movie Grid */
+  .movie-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 500px) { .movie-grid { grid-template-columns: repeat(2, 1fr); } }
+
+  .movie-card {
+    cursor: pointer; border-radius: 14px; overflow: hidden;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
+    transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
+  }
+  .movie-card:hover {
+    transform: translateY(-6px) scale(1.02);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.6), 0 0 30px rgba(245,197,24,0.06);
+    border-color: rgba(245,197,24,0.2);
+  }
+  .poster-wrap { position: relative; padding-top: 150%; background: #111; }
+  .poster-img {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    object-fit: cover; transition: opacity 0.3s;
+  }
+  .poster-fallback {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    background: linear-gradient(135deg, #12121f, #1a1a2e);
+  }
+  .poster-fallback span:first-child { font-size: 40px; }
+  .poster-fallback span:last-child { font-size: 10px; color: rgba(255,255,255,0.3); padding: 0 8px; text-align: center; }
+  .poster-overlay {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.92));
+    padding: 36px 10px 10px; display: flex; gap: 4px; flex-wrap: wrap;
+  }
+  .ptag {
+    font-size: 9px; padding: 2px 6px; border-radius: 4px;
+    font-weight: 700; backdrop-filter: blur(4px);
+  }
+  .card-info { padding: 12px; }
+  .card-title {
+    color: #fff; font-size: 13px; font-weight: 700; line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .card-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+  .card-year { color: #666; font-size: 11px; }
+  .card-rating { color: #F5C518; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 3px; }
+
+  /* Detail */
+  .detail { animation: fadeIn 0.4s both; padding-bottom: 40px; }
+  .back-btn {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
+    color: #aaa; padding: 8px 16px; border-radius: 10px; cursor: pointer;
+    font-size: 13px; margin-bottom: 24px; transition: all 0.2s;
+  }
+  .back-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+  .det-hero {
+    position: relative; border-radius: 18px; overflow: hidden;
+    margin-bottom: 24px; min-height: 200px;
+    background: linear-gradient(135deg, #12121f, #1a1a2e);
+  }
+  .det-backdrop {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    object-fit: cover; opacity: 0.3; filter: blur(2px);
+  }
+  .det-backdrop-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, #08080f 0%, rgba(8,8,15,0.7) 50%, rgba(8,8,15,0.4) 100%);
+  }
+  .det-content { position: relative; z-index: 1; padding: 24px; display: flex; gap: 20px; flex-wrap: wrap; }
+  .det-poster {
+    width: 160px; flex-shrink: 0; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.08);
+  }
+  .det-poster img { width: 100%; display: block; }
+  .det-poster-fallback {
+    width: 100%; height: 240px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 8px;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+  }
+  .det-info { flex: 1; min-width: 200px; display: flex; flex-direction: column; justify-content: flex-end; }
+  .det-title { font-size: 26px; font-weight: 800; line-height: 1.3; }
+  .det-sub { color: #888; font-size: 13px; margin-top: 4px; }
+  .det-rating { color: #F5C518; font-size: 16px; font-weight: 700; margin-top: 10px; display: flex; align-items: center; gap: 4px; }
+  .det-genres { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .genre-tag {
+    padding: 4px 12px; border-radius: 20px;
+    background: rgba(245,197,24,0.08); color: #F5C518;
+    font-size: 11px; font-weight: 600; border: 1px solid rgba(245,197,24,0.15);
+  }
+  .det-overview { color: #aaa; font-size: 14px; line-height: 1.85; margin-top: 20px; padding: 0 4px; }
+
+  /* Platforms */
+  .plat-section { margin-top: 28px; }
+  .plat-title {
+    font-family: 'Bebas Neue', sans-serif; color: #F5C518;
+    font-size: 20px; letter-spacing: 2px; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .plat-list { display: flex; flex-direction: column; gap: 8px; }
+  .plat-btn {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
+    cursor: pointer; width: 100%; transition: all 0.25s;
+    text-decoration: none; color: #fff;
+  }
+  .plat-btn:hover {
+    background: rgba(255,255,255,0.08); transform: translateX(4px);
+    border-color: rgba(255,255,255,0.15);
+  }
+  .plat-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 16px; flex-shrink: 0;
+  }
+  .plat-name { font-size: 14px; font-weight: 600; }
+  .plat-type { font-size: 11px; color: #888; margin-top: 1px; }
+  .plat-arrow { color: #555; font-size: 18px; margin-left: auto; transition: transform 0.2s; }
+  .plat-btn:hover .plat-arrow { transform: translateX(3px); color: #F5C518; }
+
+  .no-plat {
+    color: #666; font-size: 13px; padding: 20px;
+    text-align: center; background: rgba(255,255,255,0.02);
+    border-radius: 12px; border: 1px dashed rgba(255,255,255,0.08);
+  }
+
+  /* Results */
+  .res-header { margin-bottom: 20px; animation: slideUp 0.4s both; }
+  .res-back {
+    background: none; border: none; color: #666; cursor: pointer;
+    font-size: 12px; padding: 0; margin-bottom: 6px; display: block;
+    transition: color 0.2s;
+  }
+  .res-back:hover { color: #F5C518; }
+  .res-title { font-size: 20px; font-weight: 800; }
+  .res-count { color: #555; font-size: 12px; margin-top: 3px; }
+
+  /* Loading */
+  .loading { text-align: center; padding: 80px 0; animation: fadeIn 0.3s both; }
+  .spinner {
+    width: 40px; height: 40px; border: 3px solid rgba(245,197,24,0.15);
+    border-top-color: #F5C518; border-radius: 50%;
+    animation: spin 0.8s linear infinite; margin: 0 auto 16px;
+  }
+  .loading p { color: #666; font-size: 13px; }
+
+  /* Empty */
+  .empty { text-align: center; padding: 60px 0; animation: fadeIn 0.4s both; }
+  .empty .icon { font-size: 44px; margin-bottom: 16px; opacity: 0.4; }
+  .empty p { color: #777; font-size: 14px; }
+  .empty .sub { color: #555; font-size: 12px; margin-top: 6px; }
+
+  /* Footer */
+  .footer {
+    text-align: center; padding: 24px 0 32px; margin-top: 40px;
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+  .footer p { color: #444; font-size: 10px; line-height: 1.6; }
+
+  /* Trending header */
+  .trending-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+
+  @media (max-width: 480px) {
+    .hero h1 { font-size: 24px; }
+    .det-title { font-size: 22px; }
+    .det-poster { width: 120px; }
+    .det-content { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="ambient"></div>
+<div class="ambient-bottom"></div>
+
+<div class="wrap">
+  <!-- Header -->
+  <header class="header">
+    <div class="logo" onclick="goHome()">
+      <div class="logo-icon">🎬</div>
+      <div>
+        <div class="logo-name">FILMFINDER</div>
+        <div class="logo-sub">どこで観る？をすぐ解決</div>
+      </div>
+    </div>
+    <div class="tmdb-badge">Powered by<br>TMDB API</div>
+  </header>
+
+  <div id="app"></div>
+
+  <footer class="footer">
+    <p>This product uses the TMDB API but is not endorsed or certified by TMDB.<br>© 2026 FilmFinder</p>
+  </footer>
+</div>
+
+<script>
+// ===== CONFIG =====
+var API_KEY = "f0e35bf109f385873e5b470d78c71ef0";
+var BASE = "https://api.themoviedb.org/3";
+var IMG = "https://image.tmdb.org/t/p/";
+
+var MOODS = [
+  { emoji:"😭", label:"泣きたい", genreIds:[18,10749] },
+  { emoji:"😱", label:"ハラハラ", genreIds:[53,28,27] },
+  { emoji:"😂", label:"笑いたい", genreIds:[35] },
+  { emoji:"🚀", label:"壮大な冒険", genreIds:[878,12,14] },
+  { emoji:"🎨", label:"アニメ", genreIds:[16] },
+  { emoji:"💕", label:"恋愛気分", genreIds:[10749] }
+];
+
+// Platform colors & affiliate URLs (will be replaced with real affiliate links)
+var PLATFORM_META = {
+  "Netflix":       { color:"#E50914", icon:"N", url:"https://www.netflix.com/" },
+  "Amazon Prime Video": { color:"#00A8E1", icon:"P", url:"https://www.amazon.co.jp/gp/video/storefront" },
+  "Amazon Video":  { color:"#00A8E1", icon:"P", url:"https://www.amazon.co.jp/gp/video/storefront" },
+  "Disney Plus":   { color:"#113CCF", icon:"D+", url:"https://www.disneyplus.com/" },
+  "Apple TV":      { color:"#AAAAAA", icon:"A", url:"https://tv.apple.com/" },
+  "Apple TV Plus": { color:"#AAAAAA", icon:"A+", url:"https://tv.apple.com/" },
+  "Hulu":          { color:"#1CE783", icon:"H", url:"https://www.hulu.jp/" },
+  "U-NEXT":        { color:"#24B47E", icon:"U", url:"https://video.unext.jp/" },
+  "dTV":           { color:"#FF6B35", icon:"d", url:"https://video.dmkt-sp.jp/" },
+  "ABEMA":         { color:"#00C853", icon:"Ab", url:"https://abema.tv/" },
+  "Rakuten TV":    { color:"#BF0000", icon:"R", url:"https://tv.rakuten.co.jp/" },
+  "Google Play Movies": { color:"#4285F4", icon:"G", url:"https://play.google.com/store/movies" },
+  "YouTube":       { color:"#FF0000", icon:"Y", url:"https://www.youtube.com/" },
+  "Crunchyroll":   { color:"#F47521", icon:"CR", url:"https://www.crunchyroll.com/" },
+  "Paramount Plus":{ color:"#0064FF", icon:"P+", url:"https://www.paramountplus.com/" },
+  "MUBI":          { color:"#001489", icon:"M", url:"https://mubi.com/" },
+  "WOW":           { color:"#0072CE", icon:"W", url:"https://www.wowow.co.jp/" }
+};
+
+// ===== STATE =====
+var currentView = "home";
+var searchQuery = "";
+var searchResults = [];
+var selectedMovie = null;
+var selectedMood = null;
+var trendingMovies = [];
+var movieProviders = [];
+var isLoading = false;
+
+// ===== API FUNCTIONS =====
+function apiGet(path, params, callback) {
+  var url = BASE + path + "?api_key=" + API_KEY + "&language=ja-JP";
+  if (params) {
+    for (var key in params) {
+      url += "&" + key + "=" + encodeURIComponent(params[key]);
+    }
+  }
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", url);
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      try { callback(null, JSON.parse(xhr.responseText)); }
+      catch(e) { callback(e); }
+    } else {
+      callback(new Error("API error: " + xhr.status));
+    }
+  };
+  xhr.onerror = function() { callback(new Error("Network error")); };
+  xhr.send();
+}
+
+function searchMovies(query, callback) {
+  apiGet("/search/movie", { query: query, region: "JP", include_adult: "false" }, function(err, data) {
+    if (err) return callback(err);
+    callback(null, data.results || []);
+  });
+}
+
+function getMovieDetail(id, callback) {
+  apiGet("/movie/" + id, { append_to_response: "credits" }, function(err, data) {
+    if (err) return callback(err);
+    callback(null, data);
+  });
+}
+
+function getProviders(id, callback) {
+  apiGet("/movie/" + id + "/watch/providers", {}, function(err, data) {
+    if (err) return callback(err);
+    var jp = (data.results && data.results.JP) ? data.results.JP : null;
+    callback(null, jp);
+  });
+}
+
+function getTrending(callback) {
+  apiGet("/trending/movie/week", { region: "JP" }, function(err, data) {
+    if (err) return callback(err);
+    callback(null, (data.results || []).slice(0, 9));
+  });
+}
+
+function discoverByGenre(genreIds, callback) {
+  apiGet("/discover/movie", {
+    with_genres: genreIds.join(","),
+    sort_by: "popularity.desc",
+    region: "JP",
+    "vote_count.gte": "100"
+  }, function(err, data) {
+    if (err) return callback(err);
+    callback(null, (data.results || []).slice(0, 12));
+  });
+}
+
+// ===== RENDER HELPERS =====
+function posterUrl(path, size) {
+  if (!path) return null;
+  return IMG + (size || "w342") + path;
+}
+
+function makeCard(movie, index) {
+  var poster = posterUrl(movie.poster_path);
+  var posterHtml = poster
+    ? '<img class="poster-img" src="' + poster + '" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+      '<div class="poster-fallback" style="display:none"><span>🎬</span></div>'
+    : '<div class="poster-fallback"><span>🎬</span></div>';
+
+  var rating = movie.vote_average ? movie.vote_average.toFixed(1) : "—";
+  var year = movie.release_date ? movie.release_date.substring(0,4) : "";
+
+  return '<div class="movie-card" style="animation:slideUp 0.5s both;animation-delay:' + (index * 0.05) + 's" onclick="openDetail(' + movie.id + ')">' +
+    '<div class="poster-wrap">' + posterHtml +
+      '<div class="poster-overlay"></div>' +
+    '</div>' +
+    '<div class="card-info">' +
+      '<div class="card-title">' + (movie.title || movie.original_title) + '</div>' +
+      '<div class="card-meta">' +
+        '<span class="card-year">' + year + '</span>' +
+        '<span class="card-rating">★ ' + rating + '</span>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function makePlatformLink(provider, type) {
+  var meta = PLATFORM_META[provider.provider_name] || { color: "#666", icon: "?", url: "#" };
+  var txtColor = meta.color === "#AAAAAA" || meta.color === "#FFFFFF" ? "#000" : "#fff";
+  var typeLabel = type === "flatrate" ? "見放題" : type === "rent" ? "レンタル" : type === "buy" ? "購入" : type;
+
+  return '<a href="' + meta.url + '" target="_blank" rel="noopener" class="plat-btn">' +
+    '<div class="plat-icon" style="background:' + meta.color + ';color:' + txtColor + '">' + meta.icon + '</div>' +
+    '<div style="flex:1;text-align:left">' +
+      '<div class="plat-name">' + provider.provider_name + '</div>' +
+      '<div class="plat-type">' + typeLabel + '</div>' +
+    '</div>' +
+    '<span class="plat-arrow">→</span>' +
+  '</a>';
+}
+
+// ===== ACTIONS =====
+function doSearch() {
+  var input = document.getElementById("searchInput");
+  if (!input) return;
+  var q = input.value.trim();
+  if (!q) return;
+
+  searchQuery = q;
+  selectedMood = null;
+  currentView = "loading";
+  render();
+
+  searchMovies(q, function(err, results) {
+    if (err) {
+      searchResults = [];
+      currentView = "results";
+      render();
+      return;
+    }
+    searchResults = results;
+    currentView = "results";
+    render();
+  });
+}
+
+function doMoodSearch(label) {
+  var mood = null;
+  for (var i = 0; i < MOODS.length; i++) {
+    if (MOODS[i].label === label) { mood = MOODS[i]; break; }
+  }
+  if (!mood) return;
+  selectedMood = mood;
+  searchQuery = "";
+  currentView = "loading";
+  render();
+
+  discoverByGenre(mood.genreIds, function(err, results) {
+    searchResults = err ? [] : results;
+    currentView = "results";
+    render();
+  });
+}
+
+function openDetail(id) {
+  currentView = "loading";
+  render();
+  window.scrollTo(0, 0);
+
+  getMovieDetail(id, function(err, movie) {
+    if (err) { currentView = "home"; render(); return; }
+    selectedMovie = movie;
+    movieProviders = [];
+
+    getProviders(id, function(err2, providers) {
+      if (!err2 && providers) {
+        movieProviders = providers;
+      }
+      currentView = "detail";
+      render();
+    });
+  });
+}
+
+function goBack() {
+  currentView = searchResults.length > 0 ? "results" : "home";
+  selectedMovie = null;
+  movieProviders = [];
+  render();
+}
+
+function goHome() {
+  currentView = "home";
+  searchQuery = "";
+  searchResults = [];
+  selectedMovie = null;
+  selectedMood = null;
+  movieProviders = [];
+  render();
+  window.scrollTo(0, 0);
+}
+
+// ===== MAIN RENDER =====
+function render() {
+  var app = document.getElementById("app");
+
+  if (currentView === "home") {
+    var moodsHtml = "";
+    for (var i = 0; i < MOODS.length; i++) {
+      var m = MOODS[i];
+      moodsHtml += '<div class="mood-card" onclick="doMoodSearch(\'' + m.label + '\')">' +
+        '<div class="mood-emoji">' + m.emoji + '</div>' +
+        '<div class="mood-label">' + m.label + '</div></div>';
+    }
+
+    var trendHtml = "";
+    if (trendingMovies.length > 0) {
+      for (var i = 0; i < trendingMovies.length; i++) {
+        trendHtml += makeCard(trendingMovies[i], i);
+      }
+    } else {
+      trendHtml = '<div style="grid-column:1/-1;text-align:center;padding:40px 0">' +
+        '<div class="spinner"></div><p style="color:#555;font-size:12px">読み込み中...</p></div>';
+    }
+
+    app.innerHTML =
+      '<div style="animation:fadeIn 0.5s both">' +
+        '<div class="hero">' +
+          '<h1>觳たい映画、<br><span class="gold">どこで観れる？</span></h1>' +
+          '<p>全世界の映画から配信プラットフォームを一瞬で比較</p>' +
+        '</div>' +
+        '<div class="search-wrap">' +
+          '<div class="search-row">' +
+            '<span style="font-size:16px;margin-right:8px;opacity:0.4">🔍</span>' +
+            '<input id="searchInput" placeholder="映画タイトルを入力..." value="" onkeydown="if(event.key===\'Enter\')doSearch()">' +
+            '<button class="search-btn" onclick="doSearch()">検索</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="sec-title">🎭 今の気分から探す</div>' +
+        '<div class="mood-grid">' + moodsHtml + '</div>' +
+        '<div class="trending-header"><span class="sec-title" style="margin-bottom:0">🔥 今週のトレンド</span></div>' +
+        '<div class="movie-grid">' + trendHtml + '</div>' +
+      '</div>';
+
+    // Focus search input
+    var inp = document.getElementById("searchInput");
+    if (inp) inp.focus();
+
+  } else if (currentView === "results") {
+    var label = selectedMood
+      ? (selectedMood.emoji + " " + selectedMood.label)
+      : ("「" + searchQuery + "」の検索結果");
+    var content = "";
+    if (searchResults.length > 0) {
+      content = '<div class="movie-grid">';
+      for (var i = 0; i < searchResults.length; i++) {
+        content += makeCard(searchResults[i], i);
+      }
+      content += '</div>';
+    } else {
+      content = '<div class="empty"><div class="icon">🎬</div>' +
+        '<p>該当する作品が見つかりませんでした</p>' +
+        '<p class="sub">別のキーワードで検索してみてください</p></div>';
+    }
+    app.innerHTML =
+      '<div style="padding-bottom:32px">' +
+        '<div class="res-header">' +
+          '<button class="res-back" onclick="goHome()">← ホームに戻る</button>' +
+          '<div class="res-title">' + label + '</div>' +
+          '<div class="res-count">' + searchResults.length + '件</div>' +
+        '</div>' + content +
+      '</div>';
+
+  } else if (currentView === "detail" && selectedMovie) {
+    var mv = selectedMovie;
+    var backdropUrl = mv.backdrop_path ? posterUrl(mv.backdrop_path, "w1280") : null;
+    var posterSrc = posterUrl(mv.poster_path, "w342");
+
+    var posterHtml = posterSrc
+      ? '<img src="' + posterSrc + '" alt="" style="width:100%;display:block" onerror="this.outerHTML=\'<div class=det-poster-fallback><span style=font-size:48px>🎬</span></div>\'">'
+      : '<div class="det-poster-fallback"><span style="font-size:48px">🎬</span></div>';
+
+    var backdropHtml = backdropUrl
+      ? '<img class="det-backdrop" src="' + backdropUrl + '" alt="">' : '';
+
+    var genres = "";
+    if (mv.genres) {
+      for (var i = 0; i < mv.genres.length; i++) {
+        genres += '<span class="genre-tag">' + mv.genres[i].name + '</span>';
+      }
+    }
+
+    var year = mv.release_date ? mv.release_date.substring(0,4) : "";
+    var runtime = mv.runtime ? mv.runtime + "分" : "";
+    var rating = mv.vote_average ? mv.vote_average.toFixed(1) : "—";
+
+    // Providers
+    var provHtml = "";
+    var hasProviders = false;
+
+    if (movieProviders) {
+      var sections = [
+        { key: "flatrate", label: "flatrate" },
+        { key: "rent", label: "rent" },
+        { key: "buy", label: "buy" }
+      ];
+      for (var s = 0; s < sections.length; s++) {
+        var sec = sections[s];
+        var list = movieProviders[sec.key];
+        if (list && list.length > 0) {
+          hasProviders = true;
+          for (var i = 0; i < list.length; i++) {
+            provHtml += makePlatformLink(list[i], sec.label);
+          }
+        }
+      }
+    }
+
+    if (!hasProviders) {
+      provHtml = '<div class="no-plat">日本での配信情報が見つかりませんでした</div>';
+    }
+
+    app.innerHTML =
+      '<div class="detail">' +
+        '<button class="back-btn" onclick="goBack()">← 戻る</button>' +
+        '<div class="det-hero">' +
+          backdropHtml +
+          '<div class="det-backdrop-overlay"></div>' +
+          '<div class="det-content">' +
+            '<div class="det-poster">' + posterHtml + '</div>' +
+            '<div class="det-info">' +
+              '<div class="det-title">' + (mv.title || mv.original_title) + '</div>' +
+              '<div class="det-sub">' + (mv.original_title || "") + (year ? " (" + year + ")" : "") + (runtime ? " · " + runtime : "") + '</div>' +
+              '<div class="det-rating">★ ' + rating + '</div>' +
+              '<div class="det-genres">' + genres + '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        (mv.overview ? '<p class="det-overview">' + mv.overview + '</p>' : '') +
+        '<div class="plat-section">' +
+          '<div class="plat-title">📺 STREAMING PLATFORMS</div>' +
+          '<div class="plat-list">' + provHtml + '</div>' +
+        '</div>' +
+      '</div>';
+
+  } else if (currentView === "loading") {
+    app.innerHTML = '<div class="loading"><div class="spinner"></div><p>検索中...</p></div>';
+  }
+}
+
+// ===== INIT =====
+render();
+
+// Load trending on startup
+getTrending(function(err, movies) {
+  if (!err && movies) {
+    trendingMovies = movies;
+    if (currentView === "home") render();
+  }
+});
+</script>
+</body>
+</html>
+ba(255,255,255,0.1); color: #fff; }
+
+  .det-hero {
+    position: relative; border-radius: 18px; overflow: hidden;
+    margin-bottom: 24px; min-height: 200px;
+    background: linear-gradient(135deg, #12121f, #1a1a2e);
+  }
+  .det-backdrop {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    object-fit: cover; opacity: 0.3; filter: blur(2px);
+  }
+  .det-backdrop-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, #08080f 0%, rgba(8,8,15,0.7) 50%, rgba(8,8,15,0.4) 100%);
+  }
+  .det-content { position: relative; z-index: 1; padding: 24px; display: flex; gap: 20px; flex-wrap: wrap; }
+  .det-poster {
+    width: 160px; flex-shrink: 0; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.08);
+  }
+  .det-poster img { width: 100%; display: block; }
+  .det-poster-fallback {
+    width: 100%; height: 240px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 8px;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+  }
+  .det-info { flex: 1; min-width: 200px; display: flex; flex-direction: column; justify-content: flex-end; }
+  .det-title { font-size: 26px; font-weight: 800; line-height: 1.3; }
+  .det-sub { color: #888; font-size: 13px; margin-top: 4px; }
+  .det-rating { color: #F5C518; font-size: 16px; font-weight: 700; margin-top: 10px; display: flex; align-items: center; gap: 4px; }
+  .det-genres { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .genre-tag {
+    padding: 4px 12px; border-radius: 20px;
+    background: rgba(245,197,24,0.08); color: #F5C518;
+    font-size: 11px; font-weight: 600; border: 1px solid rgba(245,197,24,0.15);
+  }
+  .det-overview { color: #aaa; font-size: 14px; line-height: 1.85; margin-top: 20px; padding: 0 4px; }
+
+  /* Platforms */
+  .plat-section { margin-top: 28px; }
+  .plat-title {
+    font-family: 'Bebas Neue', sans-serif; color: #F5C518;
+    font-size: 20px; letter-spacing: 2px; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .plat-list { display: flex; flex-direction: column; gap: 8px; }
+  .plat-btn {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
+    cursor: pointer; width: 100%; transition: all 0.25s;
+    text-decoration: none; color: #fff;
+  }
+  .plat-btn:hover {
+    background: rgba(255,255,255,0.08); transform: translateX(4px);
+    border-color: rgba(255,255,255,0.15);
+  }
+  .plat-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 16px; flex-shrink: 0;
+  }
+  .plat-name { font-size: 14px; font-weight: 600; }
+  .plat-type { font-size: 11px; color: #888; margin-top: 1px; }
+  .plat-arrow { color: #555; font-size: 18px; margin-left: auto; transition: transform 0.2s; }
+  .plat-btn:hover .plat-arrow { transform: translateX(3px); color: #F5C518; }
+
+  .no-plat {
+    color: #666; font-size: 13px; padding: 20px;
+    text-align: center; background: rgba(255,255,255,0.02);
+    border-radius: 12px; border: 1px dashed rgba(255,255,255,0.08);
+  }
+
+  /* Results */
+  .res-header { margin-bottom: 20px; animation: slideUp 0.4s both; }
+  .res-back {
+    background: none; border: none; color: #666; cursor: pointer;
+    font-size: 12px; padding: 0; margin-bottom: 6px; display: block;
+    transition: color 0.2s;
+  }
+  .res-back:hover { color: #F5C518; }
+  .res-title { font-size: 20px; font-weight: 800; }
+  .res-count { color: #555; font-size: 12px; margin-top: 3px; }
+
+  /* Loading */
+  .loading { text-align: center; padding: 80px 0; animation: fadeIn 0.3s both; }
+  .spinner {
+    width: 40px; height: 40px; border: 3px solid rgba(245,197,24,0.15);
+    border-top-color: #F5C518; border-radius: 50%;
+    animation: spin 0.8s linear infinite; margin: 0 auto 16px;
+  }
+  .loading p { color: #666; font-size: 13px; }
+
+  /* Empty */
+  .empty { text-align: center; padding: 60px 0; animation: fadeIn 0.4s both; }
+  .empty .icon { font-size: 44px; margin-bottom: 16px; opacity: 0.4; }
+  .empty p { color: #777; font-size: 14px; }
+  .empty .sub { color: #555; font-size: 12px; margin-top: 6px; }
+
+  /* Footer */
+  .footer {
+    text-align: center; padding: 24px 0 32px; margin-top: 40px;
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+  .footer p { color: #444; font-size: 10px; line-height: 1.6; }
+
+  /* Trending header */
+  .trending-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+
+  @media (max-width: 480px) {
+    .hero h1 { font-size: 24px; }
+    .det-title { font-size: 22px; }
+    .det-poster { width: 120px; }
+    .det-content { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="ambient"></div>
+<div class="ambient-bottom"></div>
+
+<div class="wrap">
+  <!-- Header -->
+  <header class="header">
+    <div class="logo" onclick="goHome()">
+      <div class="logo-icon">🎬</div>
+      <div>
+        <div class="logo-name">FILMFINDER</div>
+        <div class="logo-sub">どこで観る？をすぐ解決</div>
+      </div>
+    </div>
+    <div class="tmdb-badge">Powered by<br>TMDB API</div>
+  
+</header>
+
+  <div id="app"></div>
+
+  <footer class="footer">
+    <p>This product uses the TMDB API but is not endorsed or certified by TMDB.<br>© 2026 FilmFinder</p>
+  </footer>
+</div>
+
+<script>
+// ===== COFIGRATED =====
+var API_KEY = "f0e35bf109f385873e5b470d78c71ef0";
+var BASE = "https://api.themoviedb.org/3";
+var IMG = "https://image.tmdb.org/t/p/";
+
+var MOODS = [
+  { emoji:"😭", label:"泣きたい", genreIds:[18,10749] },
+  { emoji:"😱", label:"ハラハラ", genreIds:[53,28,27] },
+  { emoji:"😂", label:"笑いたい", genreIds:[35] },
+  { emoji:"🚀", label:"壮大な冒険", genreIds:[878,12,14] },
+  { emoji:"🎨", label:"アニメ", genreIds:[16] },
+  { emoji:"💕", label:"恋愛気分", genreIds:[10749] }
+];
+
+// Platform colors & affiliate URLs (will be replaced with real affiliate links)
+var PLATFORM_META = {
+  "Netflix":       { color:"#E50914", icon:"N", url:"https://www.netflix.com/" },
+  "Amazon Prime Video": { color:"#00A8E1", icon:"P", url:"https://www.amazon.co.jp/gp/video/storefront" },
+  "Amazon Video":  { color:"#00A8E1", icon:"P", url:"https://www.amazon.co.jp/gp/video/storefront" },
+  "Disney Plus":   { color:"#113CCF", icon:"D+", url:"https://www.disneyplus.com/" },
+  "Apple TV":      { color:"#AAAAAA", icon:"A", url:"https://tv.apple.com/" },
+  "Apple TV Plus": { color:"#AAAAAA", icon:"A+", url:"https://tv.apple.com/" },
+  "Hulu":          { color:"#1CE783", icon:"H", url:"https://www.hulu.jp/" },
+  "U-NEXT":        { color:"#24B47E", icon:"U", url:"https://video.unext.jp/" },
+  "dTV":           { color:"#FF6B35", icon:"d", url:"https://video.dmkt-sp.jp/" },
+  "ABEMA":         { color:"#00C853", icon:"Ab", url:"https://abema.tv/" },
+  "Rakuten TV":    { color:"#BF0000", icon:"R", url:"https://tv.rakuten.co.jp/" },
+  "Google Play Movies": { color:"#4285F4", icon:"G", url:"https://play.google.com/store/movies" },
+  "YouTube":       { color:"#FF0000", icon:"Y", url:"https://www.youtube.com/" },
+  "Crunchyroll":   { color:"#F47521", icon:"CR", url:"https://www.crunchyroll.com/" },
+  "Paramount Plus":{ color:"#0064FF", icon:"P+", url:"https://www.paramountplus.com/" },
+  "MUBI":          { color:"#001489", icon:"M", url:"https://mubi.com/" },
+  "WOW":           { color:"#0072CE", icon:"W", url:"https://www.wowow.co.jp/" }
+};
+
+// ===== ATDUL =====
+var currentView = "home";
+var searchQuery = "";
+var searchResults = [];
+var selectedMovie = null;
+var selectedMood = null;
+var trendingMovies = [];
+var movieProviders = [];
+var isLoading = false;
+
+// ===== API FUNCTIONS =====
+function apiGet(path, params, callback) {
+  var url = BASE + path + "?api_key=" + API_KEY + "&language=ja-JP";
+  if (params) {
+    for (var key in params) {
+      url += "&" + key + "=" + encodeURIComponent(params[key]);
+    }
+  }
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", url);
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      try { callback(null, JSON.parse(xhr.responseText)); }
+      catch(e) { callback(e); }
+    } else {
+      callback(new Error("API error: " + xhr.status));
+    }
+  };
+  xhr.onerror = function() { callback(new Error("Network error")); };
+  xhr.send();
+}
+
+function searchMovies(query, callback) {
+  apiGet("/search/movie", { query: query, region: "JP", include_adult: "false" }, function(err, data) {
+    if (err) return callback(err);
+    callback(null, data.results || []);
+  });
+}
+
+function getMovieDetail(id, callback) {
+  apiGet("/movie/" + id, { append_to_response: "credits" }, function(err, data) {
+    if (err) return callback(err);
+    callback(null, data);
+  });
+}
+
+function getProviders(id, callback) {
+  apiGet("/movie/" + id + "/watch/providers", {}, function(err, data) {
+    if (err) return callback(err);
+    var jp = (data.results && data.results.JP) ? data.results.JP : null;
+    callback(null, jp);
+  });
+}
+
+function getTrending(callback) {
+  apiGet("/trending/movie/week", { region: "JP" }, function(err, data) {
+    if (err) return callback(err);
+    callback(null, (data.results || []).slice(0, 9));
+  });
+}
+
+function discoverByGenre(genreIds, callback) {
+  apiGet("/discover/movie", {
+    with_genres: genreIds.join(","),
+    sort_by: "popularity.desc",
+    region: "JP",
+    "vote_count.gte": "100"
+  }, function(err, data) {
+    if (err) return callback(err);
+    callback(null, (data.results || []).slice(0, 12));
+  });
+}
+
+// ===== REMAT����OOOOB��[��[ۈ��\�\�
+]�^�JHY�
+\]
+H�]\���[�]\��SQ�
+�
+�^�H�����H
+�]B���[��[ۈXZ�P�\�
+[ݚYK[�^
+H�\���\�H��\�\�
+[ݚYK���\��]
+N�\���\�[H��\���	�[Y��\��H���\�Z[YȈܘ�H��
+���\�
+�	Ȉ[H��ۙ\��܏H�\˜�[K�\�^OW	ۛۙW	��\˛�^[[Y[��X�[�˜�[K�\�^OW	ٛ^	ȏ��
+	�]��\��H���\�Y�[�X�Ȉ�[OH�\�^N��ۙH���[��'���[���]���	�]��\��H���\�Y�[�X�ȏ��[��'���[���]�����\��][��H[ݚYK���W�]�\�Y�H�[ݚYK���W�]�\�Y�K�њ^Y
+JH���%��\�YX\�H[ݚYK��[X\�W�]H�[ݚYK��[X\�W�]K��X���[��
+H�����]\��	�]��\��H�[ݚYKX�\���[OH�[�[X][ێ��YU\�\����[�[X][ۋY[^N��
+�
+[�^
+��
+JH
+�	�Ȉۘ�X��H��[�]Z[
+	�
+�[ݚYK�Y
+�	�H���
+	�]��\��H���\�]ܘ\���
+���\�[
+	�]��\��H���\�[ݙ\�^H���]���
+	��]���
+	�]��\��H��\�Z[��ȏ��
+	�]��\��H��\�]]H���
+�
+[ݚYK�]H[ݚYK�ܚY�[�[�]JH
+�	��]���
+	�]��\��H��\�[Y]H���
+	��[��\��H��\�^YX\����
+�YX\�
+�	���[���
+	��[��\��H��\�\�][�ȏ��!H	�
+��][��
+�	���[���
+	��]���
+	��]���
+	��]���B���[��[ۈXZ�T]�ܛS[���ݚY\�\JH�\�Y]HHU�ԓW�QUV��ݚY\���ݚY\�ۘ[YWH���܎��͍���X�ێ��ȋ\���ȈN�\���܈HY]K���܈OOH��PPPPPH�Y]K���܈OOH�ё������������ٙ����\�\SX�[H\HOOH��]�]H���)���/�hc��\HOOH��[������8�������Ȉ�\HOOH��^H���,�9aiH��\N��]\��	�H�Y�H��
+�Y]K�\�
+�	Ȉ\��]H�؛[�Ȉ�[H����[�\���\��H�]X�����
+	�]��\��H�]ZX�ۈ��[OH��X��ܛ�[���
+�Y]K���܈
+�	����܎��
+���܈
+�	ȏ��
+�Y]K�X�ۈ
+�	��]���
+	�]��[OH��^�N�^X[Yێ�Y����
+	�]��\��H�][�[YH���
+��ݚY\���ݚY\�ۘ[YH
+�	��]���
+	�]��\��H�]]\H���
+�\SX�[
+�	��]���
+	��]���
+	��[��\��H�]X\���ȏ������[���
+	��O��B����OOOOHP�SӔ�OOOOB��[��[ۈ��X\��
+
+H�\�[�]H��[Y[���][[Y[��RY
+��X\��[�]�NY�
+Z[�]
+H�]\���\�HH[�]��[YK��[J
+NY�
+\JH�]\����X\��]Y\�HHN�[X�Y[��H�[�\��[��Y]�H��Y[�Ȏ�[�\�
+N��X\��[ݚY\�K�[��[ۊ\���\�[�HY�
+\��H�X\���\�[�H�N�\��[��Y]�H��\�[Ȏ�[�\�
+N�]\��B��X\���\�[�H�\�[��\��[��Y]�H��\�[Ȏ�[�\�
+NJNB���[��[ۈ�[���X\��
+X�[
+H�\�[��H�[�܈
+�\�HH�HS��˛[���J��HY�
+S����WK�X�[OOHX�[
+H�[��HS����WN���XZ��B�B�������H�\��[��Y]�H��Y[�Ȏ�[�\�
+N�\��ݙ\��Q�[��J[����[��RY��[��[ۊ\���\�[�H�X\���\�[�H\����H��\�[��\��[��Y]�H��\�[Ȏ�[�\�
+NJNB���[��[ۈ�[�]Z[
+Y
+H�\��[��Y]�H��Y[�Ȏ�[�\�
+N�[��˜�ܛ��
+N��][ݚYQ]Z[
+Y�[��[ۊ\��[ݚYJHY�
+\��H��\��[��Y]�H��YH���[�\�
+N��]\���B��[X�Y[ݚYHH[ݚYN[ݚYT�ݚY\��H�N��]�ݚY\��Y�[��[ۊ\����ݚY\��HY�
+Y\���	���ݚY\��H[ݚYT�ݚY\��H�ݚY\��B��\��[��Y]�H�]Z[��[�\�
+NJNJNB���[��[ۈ�ИX��
+H�\��[��Y]�H�X\���\�[˛[������\�[Ȉ���YH��[X�Y[ݚYHH�[[ݚYT�ݚY\��H�N�[�\�
+NB���[��[ۈ���YJ
+H�\��[��Y]�H��YH��X\��]Y\�HH���X\���\�[�H�N�[X�Y[ݚYHH�[�[X�Y[��H�[[ݚYT�ݚY\��H�N�[�\�
+N�[��˜�ܛ��
+NB����OOOOHPSӈ�QQ�HOOOOB��[��[ۈ�[�\�
+H�\�\H��[Y[���][[Y[��RY
+�\�N�Y�
+�\��[��Y]�OOH��YH�H�\�[���[H���܈
+�\�HH�HS��˛[���J��H�\�HHS����WN[���[
+�H	�]��\��H�[��X�\��ۘ�X��H��[���X\��
+	��
+�K�X�[
+�	�	�H���
+	�]��\��H�[��Y[[ښH���
+�K�[[ښH
+�	��]���
+	�]��\��H�[��[X�[���
+�K�X�[
+�	��]���]���B���\��[�[H��Y�
+�[�[��[ݚY\˛[���
+H�܈
+�\�HH�H�[�[��[ݚY\˛[���J��H�[�[
+�HXZ�P�\�
+�[�[��[ݚY\��WKJNB�H[�H�[�[H	�]��[OH�ܚYX��[[��K�LN�^X[Yێ��[�\��Y[�΍���
+	�]��\��H��[��\����]���[OH���܎��MMNٛ۝\�^�N�L���*�x�o�/�8�o�.+K������]���B��\�[��\�SB�	�]��[OH�[�[X][ێ��YR[��\������
+	�]��\��H�\�ȏ��
+	�O�)���g��a9�(9�.�� O����[��\��H������jx�d��i�)���8���'���[���O��
+	��aj9.%��c8�k��(9�.��b��zacy/�x�����x�����8��x�x��8��8ह. 9�8�i���:/ ����
+	��]���
+	�]��\��H��X\��]ܘ\���
+	�]��\��H��X\��\��ȏ��
+	��[��[OH��۝\�^�N�M��X\��[�\�Y����X�]N����'�#O��[���
+	�[�]YH��X\��[�]�X�Z�\�H��(9�.����8��8���हaiyb�ˋ����[YOH��ۚ�^Y�ۏH�Y�]�[���^OOOW	�[�\�	�Y��X\��
+
+H���
+	��]ۈ�\��H��X\��X���ۘ�X��H���X\��
+
+H���'9�(�؝]ۏ��
+	��]���
+	��]���
+	�]��\��H��X�]]H��'�H9.��k��%�b!��b��y����fO�]���
+	�]��\��H�[��YܚY���
+�[���[
+�	��]���
+	�]��\��H��[�[��ZXY\����[��\��H��X�]]H��[OH�X\��[�X���N���'�)H9.�`,x�k���8��8�����O��[���]���
+	�]��\��H�[ݚYKYܚY���
+��[�[
+�	��]���
+	��]���������\��X\��[�]��\�[�H��[Y[���][[Y[��RY
+��X\��[�]�NY�
+[�
+H[�����\�
+N�H[�HY�
+�\��[��Y]�OOH��\�[ȊH�\�X�[H�[X�Y[����
+�[X�Y[���[[ښH
+���
+��[X�Y[���X�[
+B��
+��#�
+��X\��]Y\�H
+���#x�k��'9�(��d9���N�\��۝[�H��Y�
+�X\���\�[˛[���
+H�۝[�H	�]��\��H�[ݚYKYܚY����܈
+�\�HH�H�X\���\�[˛[���J��H�۝[�
+�HXZ�P�\�
+�X\���\�[��WKJNB��۝[�
+�H	��]���H[�H�۝[�H	�]��\��H�[\H��]��\��H�X�ۈ��'��]���
+	��*l�od��fx��/g9d�x�c:)���i8�b�ࢸ�o��f����i��e��g����
+	��\��H��X���b)x�k��x��8�����8��x�i��'9�(��e��i��o��i��c��h8�ex�a���]���B�\�[��\�SB�	�]��[OH�Y[��X���N�̜���
+	�]��\��H��\�ZXY\����
+	��]ۈ�\��H��\�X�X�Ȉۘ�X��H����YJ
+H����8�����8��8�j��.���؝]ۏ��
+	�]��\��H��\�]]H���
+�X�[
+�	��]���
+	�]��\��H��\�X��[����
+��X\���\�[˛[��
+�	�.��]���
